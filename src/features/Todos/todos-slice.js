@@ -1,62 +1,49 @@
-import {createSlice, createAsyncThunk} from '@reduxjs/toolkit';
+import {createSlice, createAsyncThunk, isRejectedWithValue} from '@reduxjs/toolkit';
 import {resetToDefault} from '../Reset/reset-action';
+import {act} from "react-dom/test-utils";
 export const loadTodos = createAsyncThunk(
   "@@todos/load-all",
-    // параметр нужен если мне чтото нужно передать из UI
-    async () => {
-    // параметр нужен если мне чтото нужно передать из UI
-    const res = await fetch("http://localhost:3001/todos");
-    const data =  await res.json();
-    console.log(data)
-    return  data;
+
+  // параметр нужен если мне чтото нужно передать из UI
+    async (_, {
+      rejectWithValue,
+      extra: api
+    }) => {
+    try {
+      // параметр нужен если мне чтото нужно передать из UI
+      return api.loadTodos()
+    } catch (err) {
+      return rejectWithValue("Failed to fetch all todos")
+    }
+  },
+  {
+   condition: (_, { getState, extra }) => {
+    const { loading } = getState().todos;
+
+    if (loading === "loading") {
+      return false;
+    }
+   }
   }
 )
 export const createTodo = createAsyncThunk(
   "@@todos/create-todo",
-  async (title) => {
-
-    const res = await fetch("http://localhost:3001/todos", {
-      method: "POST",
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({title, completed: false})
-    })
-   return await res.json();
+  async (title, {extra:api}) => {
+    return api.createTodo(title);
   }
 );
 export const toggleTodo = createAsyncThunk(
   '@@todos/toggle-todo',
-  async (id, {getState}) => {
+  async (id, {getState, extra: api}) => {
     const todo = getState().todos.entities.find(item => item.id === id);
-
-    const res = await fetch('http://localhost:3001/todos/' + id, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({completed: !todo.completed})
-    })
-
-    const data = await res.json();
-
-    return data;
+    return api.toggleTodo(id, { completed: !todo.completed });
   }
 );
 
 export const removeTodo = createAsyncThunk(
   "@@todos/remove-todo",
-  async (id) => {
-    const res = await fetch('http://localhost:3001/todos/' + id, {
-      method: 'DELETE',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-    })
-
-    await res.json();
-
-    return id;
+  async (id, {extra: api}) => {
+    return api.removeTodo(id);
   }
 )
 
@@ -109,6 +96,21 @@ const todoSlice = createSlice({
       })
       .addCase(removeTodo.fulfilled, (state, action) => {
         state.entities = state.entities.filter(todo => todo.id !== action.payload)
+      })
+
+      // пусть все строки с окончанием строки pending выполняют это действие..
+      // Матчер реагирует на экшены по определенному условие, выполняет типовые действия
+      .addMatcher((action) => action.type.endsWith('/pending'),(state) => {
+        state.loading = "loading";
+        state.error = null
+      })
+      .addMatcher((action) => action.type.endsWith("/rejected"), (state, action) => {
+        state.loading = "idle";
+        state.error = action.payload || action.error.message;
+      })
+      .addMatcher((action) => action.type.endsWith("/fulfilled"), (state, action) => {
+        state.loading = "idle";
+        state.error = null
       })
   }
 });

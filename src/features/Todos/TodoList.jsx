@@ -12,23 +12,26 @@ export const TodoList = () => {
   const dispatch = useDispatch();
   const {error, loading} = useSelector(state => state.todos);
   useEffect(() => {
-    dispatch(loadTodos())
+
+    const promise = dispatch(loadTodos())
       // unwrap - помогает сделать catch
       .unwrap()
       .then(() => {
         toast("All todos are fetched")
       })
-      .catch(() => {
-        toast("Error")
+      .catch((err) => {
+        toast(err)
       })
-
+  return () => {
+   promise.abort();
+  }
   }, [dispatch]);
 
   return (
     <>
       <ToastContainer/>
       <ul>
-        {error && <h3>Error..</h3>}
+        {error && <h3>{error}</h3>}
         {loading === "loading" && <h3>Loading..</h3>}
         {loading === "idle" && !error && todos.map((todo) => (
           <li key={todo.id}>
